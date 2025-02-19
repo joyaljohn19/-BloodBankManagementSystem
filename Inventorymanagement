@@ -1,0 +1,86 @@
+Imports System.Data.SqlClient
+
+Public Class InventoryManagementForm
+    Private connectionString As String = "Data Source=DESKTOP-USJNA54;Initial Catalog=Bloodbankmanagement;Integrated Security=True"
+
+    Private Sub InventoryManagementForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        LoadInventory()
+    End Sub
+
+    ' Load inventory data
+    Private Sub LoadInventory()
+        Dim query As String = "SELECT * FROM Inventory"
+        Using con As New SqlConnection(connectionString)
+            Dim cmd As New SqlCommand(query, con)
+            Dim adapter As New SqlDataAdapter(cmd)
+            Dim table As New DataTable()
+            adapter.Fill(table)
+            DataGridViewInventory.DataSource = table
+        End Using
+    End Sub
+
+    ' Add new inventory record
+    Private Sub BtnAddInventory_Click(sender As Object, e As EventArgs) Handles BtnAddInventory.Click
+        If CmbBloodType.SelectedItem Is Nothing Or TxtQuantity.Text = "" Or DtpExpirationDate.Value <= Date.Today Then
+            MessageBox.Show("Please enter valid blood type, quantity, and future expiration date.", "Input Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
+        Dim query As String = "INSERT INTO Inventory (BloodType, Quantity, ExpirationDate) VALUES (@BloodType, @Quantity, @ExpirationDate)"
+        Using con As New SqlConnection(connectionString)
+            Dim cmd As New SqlCommand(query, con)
+            cmd.Parameters.AddWithValue("@BloodType", CmbBloodType.SelectedItem.ToString())
+            cmd.Parameters.AddWithValue("@Quantity", Convert.ToInt32(TxtQuantity.Text))
+            cmd.Parameters.AddWithValue("@ExpirationDate", DtpExpirationDate.Value)
+            con.Open()
+            cmd.ExecuteNonQuery()
+            con.Close()
+        End Using
+        LoadInventory()
+    End Sub
+
+    ' Remove expired blood stock
+    Private Sub BtnRemoveExpired_Click(sender As Object, e As EventArgs) Handles BtnRemoveExpired.Click
+        Dim query As String = "DELETE FROM Inventory WHERE ExpirationDate < @Today"
+        Using con As New SqlConnection(connectionString)
+            Dim cmd As New SqlCommand(query, con)
+            cmd.Parameters.AddWithValue("@Today", Date.Today)
+            con.Open()
+            Dim rowsAffected As Integer = cmd.ExecuteNonQuery()
+            con.Close()
+            MessageBox.Show(rowsAffected.ToString() & " expired stock entries removed.", "Cleanup", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        End Using
+        LoadInventory()
+    End Sub
+
+    ' Alert for low stock
+    Private Sub BtnCheckLowStock_Click(sender As Object, e As EventArgs) Handles BtnCheckLowStock.Click
+        Dim query As String = "SELECT BloodType, SUM(Quantity) AS TotalQuantity FROM Inventory GROUP BY BloodType HAVING SUM(Quantity) < 5"
+        Using con As New SqlConnection(connectionString)
+            Dim cmd As New SqlCommand(query, con)
+            con.Open()
+            Dim reader As SqlDataReader = cmd.ExecuteReader()
+            If reader.HasRows Then
+                Dim alertMessage As String = "Low stock alert for blood types:" & Environment.NewLine
+                While reader.Read()
+                    alertMessage &= reader("BloodType").ToString() & " - " & reader("TotalQuantity").ToString() & " units remaining" & Environment.NewLine
+                End While
+                MessageBox.Show(alertMessage, "Low Stock Alert", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Else
+                MessageBox.Show("All blood types are sufficiently stocked.", "Stock Status", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+            con.Close()
+        End Using
+    End Sub
+
+    ' Navigate back to Admin Dashboard
+    Private Sub BtnBack_Click(sender As Object, e As EventArgs) Handles BtnBack.Click
+        If Application.OpenForms("AdminDashboard") IsNot Nothing Then
+            Application.OpenForms("AdminDashboard").Show()
+        Else
+            Dim dashboard As New AdminDashboard()
+            dashboard.Show()
+        End If
+        Me.Close()
+    End Sub
+End Class
